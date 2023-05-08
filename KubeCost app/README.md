@@ -13,5 +13,5 @@ DOMINO_KUBECOST_PASSWORD
 ```
 Then run 
 ```shell
-streamlit run app.py
+solara run app.py
 ```
