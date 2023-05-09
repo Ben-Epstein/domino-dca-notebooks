@@ -1,6 +1,7 @@
 import os
+from collections import defaultdict
 from datetime import datetime
-from typing import Dict
+from typing import Dict, List
 
 import pandas as pd
 import plotly.express as px
@@ -35,6 +36,25 @@ window_to_param = {
 }
 window_choice = sl.reactive(window_options[0])
 
+# TODO: This should be replaced with real values
+EXECUTION_COST_MAX = os.getenv("DOMINO_EXECUTION_COST_MAX", 300)
+PROJECT_MAX_SPEND = os.getenv("DOMINO_PROJECT_MAX_SPEND", 8)
+
+
+def get_all_organizations() -> List[str]:
+    params = {
+        "window": "30d",
+        "aggregate": "label:dominodatalab_com_organization_name",
+        "accumulate": True,
+    }
+    orgs_res = requests.get(allocations_url.value, params=params, auth=auth.value)
+    orgs = orgs_res.json()["data"][0].keys()
+    return [org for org in orgs if not org.startswith("__")]
+
+
+ALL_ORGS = [""] + get_all_organizations()
+filtered_org = sl.reactive("")
+
 
 def _format_datetime(dt_str: str) -> str:
     datetime_object = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
@@ -47,6 +67,8 @@ def get_cost_per_breakdown() -> Dict[str, float]:
         "aggregate": f"label:{breakdown_to_param[breakdown_choice.value]}",
         "accumulate": True,
     }
+    if filtered_org.value:
+        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
 
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
     data = res.json()["data"][0]
@@ -63,6 +85,8 @@ def get_overall_cost() -> Dict[str, float]:
         "aggregate": "category",
         "accumulate": True,
     }
+    if filtered_org.value:
+        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
 
@@ -73,28 +97,50 @@ def get_overall_cost() -> Dict[str, float]:
 
 
 def get_daily_cost() -> pd.DataFrame:
-    params = {"window": window_to_param[window_choice.value], "aggregate": "category"}
+    params = {
+        "window": window_to_param[window_choice.value],
+        "aggregate": "category",
+    }
+    if filtered_org.value:
+        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
     data = res.json()["data"]
     # May not have all historical days
     data = [day for day in data if day]
-
-    day_costs = {
-        day["Network"]["start"]: {key: round(day[key]["totalCost"], 2) for key in day}
-        for day in data
-    }
-    return pd.DataFrame(day_costs).T
+    # Route returns data non-cumulatively. We make it cumulative by summing over the
+    # returned windows (could be days, hours, weeks etc)
+    cuml_costs = defaultdict(float)
+    window_costs = {}
+    for window in data:
+        start = window["Network"]["start"]
+        # We get the network cost, storage cost, and compute cost
+        for key in window:
+            cuml_costs[key] += round(window[key]["totalCost"], 2)
+        window_costs[start] = dict(cuml_costs)
+    # day_costs = {
+    #     day["Network"]["start"]: {key: round(day[key]["totalCost"], 2) for key in day}
+    #     for day in data
+    # }
+    # print("HERE")
+    # print(day_costs)
+    return pd.DataFrame(window_costs).T
 
 
 def get_execution_cost_table() -> pd.DataFrame:
+    # TODO: Break down further by execution id
+    # label:dominodatalab_com_execution_id
     params = {
         "window": window_to_param[window_choice.value],
-        "aggregate": "label:dominodatalab_com_workload_type,label:dominodatalab_com_starting_user_username,label:dominodatalab_com_project_id",
-        # TODO: How do I get all the project IDs (and names)
-        #     "filter": 'label[dominodatalab_com_project_id]:"645277142a8f2d12e2e13fca"',
+        "aggregate": (
+            "label:dominodatalab_com_workload_type,"
+            "label:dominodatalab_com_starting_user_username,"
+            "label:dominodatalab_com_project_id"
+        ),
         "accumulate": True,
     }
+    if filtered_org.value:
+        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
 
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
     aloc_data = res.json()["data"][0]
@@ -108,6 +154,7 @@ def get_execution_cost_table() -> pd.DataFrame:
     keys = list(aloc_data.keys())
     keys = [key for key in keys if not key.startswith("__")]
     for key in keys:
+        # exec_id, workload_type, username, project_id = key.split("/")
         workload_type, username, project_id = key.split("/")
         key_data = aloc_data[key]
         cpu_cost = round(sum([key_data[k] for k in cpu_cost_key]), 2)
@@ -126,12 +173,14 @@ def get_execution_cost_table() -> pd.DataFrame:
                 "COMPUTE_COST": f"${compute_cost}",
                 "COMPUTE_WASTE": waste,
                 "STORAGE_COST": f"${storage_cost}",
+                # "EXECUTION_ID": exec_id,
                 "ID": project_id,
             }
         )
     df = pd.DataFrame(exec_data)
-    df["START"] = df["START"].apply(_format_datetime)
-    df["END"] = df["END"].apply(_format_datetime)
+    for col in ["START", "END"]:
+        if col in df.columns:
+            df[col] = df[col].apply(_format_datetime)
     return df
 
 
@@ -153,6 +202,19 @@ def DailyCostBreakdown() -> None:
         },
         title="Overall Cost (Cumulative)",
         color_discrete_sequence=px.colors.qualitative.Set3,
+    )
+    # Horizontal line indicating the "max" spend by the company
+    fig.add_shape(
+        type="line",
+        x0=df.index.min(),
+        x1=df.index.max(),
+        y0=EXECUTION_COST_MAX,
+        y1=EXECUTION_COST_MAX,
+        line=dict(
+            color="red",
+            width=3,
+            dash="dash",
+        ),
     )
     sl.FigurePlotly(fig)
 
@@ -194,6 +256,12 @@ def CostBreakdown() -> None:
     with sl.Card("Cost Usage - Breakdown"):
         sl.Select(label="", value=breakdown_choice, values=breakdown_options)
         costs = get_cost_per_breakdown()
+        cost_values = list(costs.values())
+        if breakdown_choice.value == "Top Projects":
+            overflow_values = [v - PROJECT_MAX_SPEND for v in cost_values]
+            overflow_values = [max(v, 0) for v in overflow_values]
+        else:
+            overflow_values = [0 for _ in cost_values]
         option = {
             # "title": {
             #     "text": 'Executions'
@@ -204,7 +272,8 @@ def CostBreakdown() -> None:
             "xAxis": {"type": "value", "boundaryGap": [0, 0.01]},
             "yAxis": {"type": "category", "data": list(costs.keys())},
             "series": [
-                {"type": "bar", "data": list(costs.values())},
+                {"type": "bar", "data": cost_values, "stack": "y"},
+                {"type": "bar", "data": overflow_values, "stack": "y", "color": "red"},
             ],
         }
         sl.FigureEcharts(option)
@@ -218,7 +287,9 @@ def Page() -> None:
         style="display: inline-block; margin: 0 auto;",
     )
     with sl.Column(style="width:15%"):
-        sl.Select(label="Window", value=window_choice, values=window_options)
+        with sl.Row():
+            sl.Select(label="Window", value=window_choice, values=window_options)
+            sl.Select(label="Organization", value=filtered_org, values=ALL_ORGS)
     with sl.Columns([2, 3]):
         CostBreakdown()
         OverallCosts()
