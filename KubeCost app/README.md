@@ -17,5 +17,5 @@ DOMINO_PROJECT_MAX_SPEND
 ```
 Then run 
 ```shell
-streamlit run app.py
+solara run app.py
 ```
