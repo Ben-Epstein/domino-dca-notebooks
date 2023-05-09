@@ -18,11 +18,12 @@ pwd = os.environ["DOMINO_KUBECOST_PASSWORD"]
 auth = sl.reactive(HTTPBasicAuth(username, pwd))
 
 # For interacting with the different scopes
-breakdown_options = ["Execution Type", "Top Projects", "User"]
+breakdown_options = ["Execution Type", "Top Projects", "User", "Organization"]
 breakdown_to_param = {
     "Execution Type": "dominodatalab_com_workload_type",
     "Top Projects": "dominodatalab_com_project_name",
     "User": "dominodatalab_com_starting_user_username",
+    "Organization": "dominodatalab_com_organization_name",
 }
 breakdown_choice = sl.reactive(breakdown_options[0])
 
@@ -39,6 +40,9 @@ window_choice = sl.reactive(window_options[0])
 # TODO: This should be replaced with real values
 EXECUTION_COST_MAX = os.getenv("DOMINO_EXECUTION_COST_MAX", 300)
 PROJECT_MAX_SPEND = os.getenv("DOMINO_PROJECT_MAX_SPEND", 8)
+ORG_MAX_SPEND = os.getenv("DOMINO_ORG_MAX_SPEND", 20)
+
+BREAKDOWN_SPEND_MAP = {"Top Projects": PROJECT_MAX_SPEND, "Organization": ORG_MAX_SPEND}
 
 
 def get_all_organizations() -> List[str]:
@@ -133,6 +137,7 @@ def get_execution_cost_table() -> pd.DataFrame:
     params = {
         "window": window_to_param[window_choice.value],
         "aggregate": (
+            "label:dominodatalab_com_workload_id,"  # TODO: workload_id or execution_id
             "label:dominodatalab_com_workload_type,"
             "label:dominodatalab_com_starting_user_username,"
             "label:dominodatalab_com_project_id"
@@ -154,8 +159,9 @@ def get_execution_cost_table() -> pd.DataFrame:
     keys = list(aloc_data.keys())
     keys = [key for key in keys if not key.startswith("__")]
     for key in keys:
-        # exec_id, workload_type, username, project_id = key.split("/")
-        workload_type, username, project_id = key.split("/")
+        workload_id, workload_type, uname, project_id = key.split("/")
+        # workload_id="foobar"
+        # workload_type, uname, project_id = key.split("/")
         key_data = aloc_data[key]
         cpu_cost = round(sum([key_data[k] for k in cpu_cost_key]), 2)
         gpu_cost = round(sum([key_data[k] for k in gpu_cost_key]), 2)
@@ -165,7 +171,7 @@ def get_execution_cost_table() -> pd.DataFrame:
         exec_data.append(
             {
                 "TYPE": workload_type,
-                "USER": username,
+                "USER": uname,
                 "START": key_data["start"],
                 "END": key_data["end"],
                 "CPU_COST": f"${cpu_cost}",
@@ -173,8 +179,8 @@ def get_execution_cost_table() -> pd.DataFrame:
                 "COMPUTE_COST": f"${compute_cost}",
                 "COMPUTE_WASTE": waste,
                 "STORAGE_COST": f"${storage_cost}",
-                # "EXECUTION_ID": exec_id,
-                "ID": project_id,
+                "WORKLOAD_ID": workload_id,
+                "PROJECT_ID": project_id,
             }
         )
     df = pd.DataFrame(exec_data)
@@ -257,8 +263,9 @@ def CostBreakdown() -> None:
         sl.Select(label="", value=breakdown_choice, values=breakdown_options)
         costs = get_cost_per_breakdown()
         cost_values = list(costs.values())
-        if breakdown_choice.value == "Top Projects":
-            overflow_values = [v - PROJECT_MAX_SPEND for v in cost_values]
+        if breakdown_choice.value in BREAKDOWN_SPEND_MAP:
+            max_spend = BREAKDOWN_SPEND_MAP[breakdown_choice.value]
+            overflow_values = [v - max_spend for v in cost_values]
             overflow_values = [max(v, 0) for v in overflow_values]
         else:
             overflow_values = [0 for _ in cost_values]
