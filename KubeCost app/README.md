@@ -1,3 +1,10 @@
+# Demo
+
+
+https://github.com/Ben-Epstein/domino-dca-notebooks/assets/22605641/34eb253b-9126-4af5-a359-100c5ef04e17
+
+
+
 # Setup
 
 ```shell
