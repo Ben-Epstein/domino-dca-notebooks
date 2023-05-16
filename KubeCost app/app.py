@@ -60,6 +60,13 @@ ALL_ORGS = [""] + get_all_organizations()
 filtered_org = sl.reactive("")
 
 
+def set_filter(params: Dict) -> None:
+    if filtered_org.value:
+        params["filter"] = (
+            f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
+        )
+
+
 def _format_datetime(dt_str: str) -> str:
     datetime_object = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
     return datetime_object.strftime("%m/%d %I:%M %p")
@@ -71,8 +78,7 @@ def get_cost_per_breakdown() -> Dict[str, float]:
         "aggregate": f"label:{breakdown_to_param[breakdown_choice.value]}",
         "accumulate": True,
     }
-    if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
+    set_filter(params)
 
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
     data = res.json()["data"][0]
@@ -89,8 +95,7 @@ def get_overall_cost() -> Dict[str, float]:
         "aggregate": "category",
         "accumulate": True,
     }
-    if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
+    set_filter(params)
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
 
@@ -105,8 +110,7 @@ def get_daily_cost() -> pd.DataFrame:
         "window": window_to_param[window_choice.value],
         "aggregate": "category",
     }
-    if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
+    set_filter(params)
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
     data = res.json()["data"]
@@ -144,8 +148,7 @@ def get_execution_cost_table() -> pd.DataFrame:
         ),
         "accumulate": True,
     }
-    if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
+    set_filter(params)
 
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
     aloc_data = res.json()["data"][0]
@@ -192,7 +195,6 @@ def get_execution_cost_table() -> pd.DataFrame:
 
 @sl.component()
 def Executions() -> None:
-    # sl.Markdown("## Executions")
     df = get_execution_cost_table()
     sl.DataFrame(df)
 
@@ -253,13 +255,15 @@ def OverallCosts() -> None:
             TopLevelCosts()
         with sl.Card():
             DailyCostBreakdown()
-        with sl.Card("Executions"):
-            Executions()
+        if filtered_org.value:
+            with sl.Card("Executions"):
+                Executions()
 
 
 @sl.component()
 def CostBreakdown() -> None:
-    with sl.Card("Cost Usage - Breakdown"):
+    name = breakdown_choice.value if breakdown_choice.value else ""
+    with sl.Card(f"Cost Usage - {name}"):
         sl.Select(label="", value=breakdown_choice, values=breakdown_options)
         costs = get_cost_per_breakdown()
         cost_values = list(costs.values())
