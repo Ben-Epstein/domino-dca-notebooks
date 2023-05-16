@@ -72,7 +72,7 @@ def get_cost_per_breakdown() -> Dict[str, float]:
         "accumulate": True,
     }
     if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
+        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
 
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
     data = res.json()["data"][0]
@@ -90,7 +90,7 @@ def get_overall_cost() -> Dict[str, float]:
         "accumulate": True,
     }
     if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
+        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
 
@@ -106,7 +106,7 @@ def get_daily_cost() -> pd.DataFrame:
         "aggregate": "category",
     }
     if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
+        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
     data = res.json()["data"]
@@ -145,7 +145,7 @@ def get_execution_cost_table() -> pd.DataFrame:
         "accumulate": True,
     }
     if filtered_org.value:
-        params["filter"] = f'label[dominodatalab_com_project_id]:"{filtered_org.value}"'
+        params["filter"] = f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
 
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
     aloc_data = res.json()["data"][0]
