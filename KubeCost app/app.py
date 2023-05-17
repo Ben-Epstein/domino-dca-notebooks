@@ -38,9 +38,9 @@ window_to_param = {
 window_choice = sl.reactive(window_options[0])
 
 # TODO: This should be replaced with real values
-EXECUTION_COST_MAX = os.getenv("DOMINO_EXECUTION_COST_MAX", 300)
+EXECUTION_COST_MAX = os.getenv("DOMINO_EXECUTION_COST_MAX", None)
 PROJECT_MAX_SPEND = os.getenv("DOMINO_PROJECT_MAX_SPEND", 8)
-ORG_MAX_SPEND = os.getenv("DOMINO_ORG_MAX_SPEND", 20)
+ORG_MAX_SPEND = os.getenv("DOMINO_ORG_MAX_SPEND", 500)
 
 BREAKDOWN_SPEND_MAP = {"Top Projects": PROJECT_MAX_SPEND, "Organization": ORG_MAX_SPEND}
 # If the user changes the global filter by clicking on a bar in the breakdown chart
@@ -125,34 +125,59 @@ def get_overall_cost() -> Dict[str, float]:
     return {key: round(data[key]["totalCost"], 2) for key in data}
 
 
+def _to_date(date_string: str) -> str:
+    """Converts minute-level date string to day level
+
+    ex:
+       _to_date(2023-04-28T15:05:00Z) -> 2023-04-28
+    """
+    dt = datetime.strptime(date_string, "%Y-%m-%dT%H:%M:%SZ")
+    return dt.strftime("%Y-%m-%d")
+
+
 def get_daily_cost() -> pd.DataFrame:
+    window = window_to_param[window_choice.value]
     params = {
-        "window": window_to_param[window_choice.value],
-        "aggregate": "category",
+        "window": window,
+        # "aggregate": "category",
     }
     set_filter(params)
     # TODO: Use the assets route to join to the aloc route, because the aloc route
     #  doesn't support filters...
 
-    res = requests.get(assets_url.value, params=params, auth=auth.value)
+    # res = requests.get(assets_url.value, params=params, auth=auth.value)
+    res = requests.get(allocations_url.value, params=params, auth=auth.value)
     data = res.json()["data"]
     # May not have all historical days
-    data = [day for day in data if day]
+    alocs = [day for day in data if day]
     # Route returns data non-cumulatively. We make it cumulative by summing over the
     # returned windows (could be days, hours, weeks etc)
-    cuml_costs = defaultdict(float)
-    window_costs = {}
-    for window in data:
-        start = window["Network"]["start"]
-        # We get the network cost, storage cost, and compute cost
-        for key in window:
-            cuml_costs[key] += round(window[key]["totalCost"], 2)
-        window_costs[start] = dict(cuml_costs)
-    # day_costs = {
-    #     day["Network"]["start"]: {key: round(day[key]["totalCost"], 2) for key in day}
-    #     for day in data
-    # }
-    return pd.DataFrame(window_costs).T
+    daily_costs = defaultdict(dict)
+
+    cpu_costs = ["cpuCost", "cpuCostAdjustment", "gpuCost", "gpuCostAdjustment"]
+    storage_costs = ["pvCost", "pvCostAdjustment", "ramCost", "ramCostAdjustment"]
+
+    costs = {"Compute": cpu_costs, "Storage": storage_costs}
+    # Gets the overall cost per day
+    for aloc in alocs:
+        for key, values in aloc.items():
+            start = values["start"]
+            for cost_type, cost_keys in costs.items():
+                if cost_type not in daily_costs[start]:
+                    daily_costs[start][cost_type] = 0.0
+                daily_costs[start][cost_type] += round(
+                    sum(values[key] for key in cost_keys), 2
+                )
+    # Cumulative sum over the daily costs
+    df = pd.DataFrame(daily_costs).T.sort_index()
+    df["Compute"] = df["Compute"].cumsum()
+    df["Storage"] = df["Storage"].cumsum()
+    # Unless we are looking at today granularity, rollup values to the day level
+    # (they are returned at the 5min level)
+    if window != "today":
+        df.index = df.index.map(_to_date)
+        df = df.groupby(level=0).max()
+    return df
 
 
 def get_execution_cost_table() -> pd.DataFrame:
@@ -229,15 +254,18 @@ def DailyCostBreakdown() -> None:
             "value": "Cost ($)",
         },
         title="Overall Cost (Cumulative)",
-        color_discrete_sequence=px.colors.qualitative.Set3,
+        # color_discrete_sequence=px.colors.qualitative.Set3,
     )
     # Horizontal line indicating the "max" spend by the company
+    exec_cost = EXECUTION_COST_MAX or (
+        (df["Compute"].max() + df["Storage"].max()) * 0.8
+    )
     fig.add_shape(
         type="line",
         x0=df.index.min(),
         x1=df.index.max(),
-        y0=EXECUTION_COST_MAX,
-        y1=EXECUTION_COST_MAX,
+        y0=exec_cost,
+        y1=exec_cost,
         line=dict(
             color="red",
             width=3,
