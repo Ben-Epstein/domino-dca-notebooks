@@ -20,12 +20,12 @@ auth = sl.reactive(HTTPBasicAuth(username, pwd))
 # For interacting with the different scopes
 breakdown_options = ["Execution Type", "Top Projects", "User", "Organization"]
 breakdown_to_param = {
-    "Execution Type": "dominodatalab_com_workload_type",
+    # "Execution Type": "dominodatalab_com_workload_type",
     "Top Projects": "dominodatalab_com_project_name",
     "User": "dominodatalab_com_starting_user_username",
     "Organization": "dominodatalab_com_organization_name",
 }
-breakdown_choice = sl.reactive(breakdown_options[0])
+# breakdown_choice = sl.reactive(breakdown_options[0])
 
 # For granular aggregations
 window_options = ["Last 30 days", "Last 15 days", "Last week", "Today"]
@@ -43,6 +43,14 @@ PROJECT_MAX_SPEND = os.getenv("DOMINO_PROJECT_MAX_SPEND", 8)
 ORG_MAX_SPEND = os.getenv("DOMINO_ORG_MAX_SPEND", 20)
 
 BREAKDOWN_SPEND_MAP = {"Top Projects": PROJECT_MAX_SPEND, "Organization": ORG_MAX_SPEND}
+# If the user changes the global filter by clicking on a bar in the breakdown chart
+# (lefthand chart), we want to change the breakdown to something else
+GLOBAL_FILTER_CHANGE_MAP = {
+    "Organization": "Top Projects",
+    "Top Projects": "User",
+    "User": "Top Projects",
+    "Execution Type": "User",
+}
 
 
 def get_all_organizations() -> List[str]:
@@ -57,14 +65,25 @@ def get_all_organizations() -> List[str]:
 
 
 ALL_ORGS = [""] + get_all_organizations()
-filtered_org = sl.reactive("")
+filtered_label = sl.reactive("")
+filtered_value = sl.reactive("")
+
+
+def set_global_filters(click_data: Dict) -> None:
+    filtered_label.set(click_data["seriesName"])  # The chart they clicked
+    filtered_value.set(click_data["name"])  # The bar within the chart they clicked
+    # breakdown_choice.set(GLOBAL_FILTER_CHANGE_MAP[breakdown_choice.value])
+
+
+def clear_filters() -> None:
+    filtered_label.set("")
+    filtered_value.set("")
 
 
 def set_filter(params: Dict) -> None:
-    if filtered_org.value:
-        params["filter"] = (
-            f'label[dominodatalab_com_organization_name]:"{filtered_org.value}"'
-        )
+    if filtered_value.value and filtered_label.value:
+        param_label = breakdown_to_param[filtered_label.value]
+        params["filter"] = f'label[{param_label}]:"{filtered_value.value}"'
 
 
 def _format_datetime(dt_str: str) -> str:
@@ -72,10 +91,11 @@ def _format_datetime(dt_str: str) -> str:
     return datetime_object.strftime("%m/%d %I:%M %p")
 
 
-def get_cost_per_breakdown() -> Dict[str, float]:
+def get_cost_per_breakdown(breakdown_for: str) -> Dict[str, float]:
     params = {
         "window": window_to_param[window_choice.value],
-        "aggregate": f"label:{breakdown_to_param[breakdown_choice.value]}",
+        # "aggregate": f"label:{breakdown_to_param[breakdown_choice.value]}",
+        "aggregate": f"label:{breakdown_for}",
         "accumulate": True,
     }
     set_filter(params)
@@ -111,6 +131,8 @@ def get_daily_cost() -> pd.DataFrame:
         "aggregate": "category",
     }
     set_filter(params)
+    # TODO: Use the assets route to join to the aloc route, because the aloc route
+    #  doesn't support filters...
 
     res = requests.get(assets_url.value, params=params, auth=auth.value)
     data = res.json()["data"]
@@ -130,8 +152,6 @@ def get_daily_cost() -> pd.DataFrame:
     #     day["Network"]["start"]: {key: round(day[key]["totalCost"], 2) for key in day}
     #     for day in data
     # }
-    # print("HERE")
-    # print(day_costs)
     return pd.DataFrame(window_costs).T
 
 
@@ -255,39 +275,50 @@ def OverallCosts() -> None:
             TopLevelCosts()
         with sl.Card():
             DailyCostBreakdown()
-        if filtered_org.value:
-            with sl.Card("Executions"):
-                Executions()
 
 
 @sl.component()
 def CostBreakdown() -> None:
-    name = breakdown_choice.value if breakdown_choice.value else ""
-    with sl.Card(f"Cost Usage - {name}"):
-        sl.Select(label="", value=breakdown_choice, values=breakdown_options)
-        costs = get_cost_per_breakdown()
-        cost_values = list(costs.values())
-        if breakdown_choice.value in BREAKDOWN_SPEND_MAP:
-            max_spend = BREAKDOWN_SPEND_MAP[breakdown_choice.value]
-            overflow_values = [v - max_spend for v in cost_values]
-            overflow_values = [max(v, 0) for v in overflow_values]
-        else:
-            overflow_values = [0 for _ in cost_values]
-        option = {
-            # "title": {
-            #     "text": 'Executions'
-            # },
-            "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
-            "legend": {},
-            "grid": {"left": "3%", "right": "4%", "bottom": "3%", "containLabel": True},
-            "xAxis": {"type": "value", "boundaryGap": [0, 0.01]},
-            "yAxis": {"type": "category", "data": list(costs.keys())},
-            "series": [
-                {"type": "bar", "data": cost_values, "stack": "y"},
-                {"type": "bar", "data": overflow_values, "stack": "y", "color": "red"},
-            ],
-        }
-        sl.FigureEcharts(option)
+    # with sl.Row(gap="1px", justify="space-around"):
+    with sl.Card("Cost Usage"):
+        with sl.Columns([1, 1, 1]):
+            for name, breakdown_choice_ in breakdown_to_param.items():
+                # with sl.Card(f"Cost Usage - {name}", margin=10):
+                # sl.Select(label="", value=breakdown_choice, values=breakdown_options)
+                costs = get_cost_per_breakdown(breakdown_choice_)
+                cost_values = list(costs.values())
+                max_spend = BREAKDOWN_SPEND_MAP.get(name, 1e1000)
+                overflow_values = [v - max_spend for v in cost_values]
+                overflow_values = [max(v, 0) for v in overflow_values]
+                option = {
+                    "title": {"text": name},
+                    "tooltip": {"trigger": "axis", "axisPointer": {"type": "shadow"}},
+                    "legend": {},
+                    "grid": {
+                        "left": "3%",
+                        "right": "4%",
+                        "bottom": "3%",
+                        "containLabel": True,
+                    },
+                    "xAxis": {"type": "value", "boundaryGap": [0, 0.01]},
+                    "yAxis": {"type": "category", "data": list(costs.keys())},
+                    "series": [
+                        {
+                            "type": "bar",
+                            "data": cost_values,
+                            "stack": "y",
+                            "name": name,
+                        },
+                        {
+                            "type": "bar",
+                            "data": overflow_values,
+                            "stack": "y",
+                            "color": "red",
+                            "name": name,
+                        },
+                    ],
+                }
+                sl.FigureEcharts(option, on_click=set_global_filters)
 
 
 @sl.component()
@@ -300,7 +331,18 @@ def Page() -> None:
     with sl.Column(style="width:15%"):
         with sl.Row():
             sl.Select(label="Window", value=window_choice, values=window_options)
-            sl.Select(label="Organization", value=filtered_org, values=ALL_ORGS)
-    with sl.Columns([2, 3]):
-        CostBreakdown()
+            if filtered_label.value and filtered_value.value:
+                sl.Button(
+                    f"{filtered_label.value}: {filtered_value.value} x",
+                    on_click=clear_filters,
+                )
+            # sl.Select(label="Organization", value=filtered_value, values=ALL_ORGS)
+    # with sl.Columns([2, 3]):
+    #     CostBreakdown()
+    #     OverallCosts()
+    with sl.Column():
         OverallCosts()
+        CostBreakdown()
+        if filtered_value.value:
+            with sl.Card("Executions"):
+                Executions()
