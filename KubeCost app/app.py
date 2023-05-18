@@ -254,7 +254,7 @@ def DailyCostBreakdown() -> None:
             "value": "Cost ($)",
         },
         title="Overall Cost (Cumulative)",
-        # color_discrete_sequence=px.colors.qualitative.Set3,
+        color_discrete_sequence=px.colors.qualitative.D3,
     )
     # Horizontal line indicating the "max" spend by the company
     exec_cost = EXECUTION_COST_MAX or (
