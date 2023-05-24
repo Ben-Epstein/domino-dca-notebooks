@@ -1,7 +1,8 @@
 # Demo
 
 
-https://github.com/Ben-Epstein/domino-dca-notebooks/assets/22605641/34eb253b-9126-4af5-a359-100c5ef04e17
+https://github.com/Ben-Epstein/domino-dca-notebooks/assets/22605641/7a81f52b-4645-474e-ba1c-d98170992c54
+
 
 
 
