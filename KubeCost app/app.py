@@ -142,8 +142,6 @@ def get_daily_cost() -> pd.DataFrame:
         # "aggregate": "category",
     }
     set_filter(params)
-    # TODO: Use the assets route to join to the aloc route, because the aloc route
-    #  doesn't support filters...
 
     # res = requests.get(assets_url.value, params=params, auth=auth.value)
     res = requests.get(allocations_url.value, params=params, auth=auth.value)
@@ -154,10 +152,11 @@ def get_daily_cost() -> pd.DataFrame:
     # returned windows (could be days, hours, weeks etc)
     daily_costs = defaultdict(dict)
 
-    cpu_costs = ["cpuCost", "cpuCostAdjustment", "gpuCost", "gpuCostAdjustment"]
+    cpu_costs = ["cpuCost", "cpuCostAdjustment"]
+    gpu_costs = ["gpuCost", "gpuCostAdjustment"]
     storage_costs = ["pvCost", "pvCostAdjustment", "ramCost", "ramCostAdjustment"]
 
-    costs = {"Compute": cpu_costs, "Storage": storage_costs}
+    costs = {"CPU": cpu_costs, "GPU": gpu_costs, "Storage": storage_costs}
     # Gets the overall cost per day
     for aloc in alocs:
         for key, values in aloc.items():
@@ -170,7 +169,8 @@ def get_daily_cost() -> pd.DataFrame:
                 )
     # Cumulative sum over the daily costs
     df = pd.DataFrame(daily_costs).T.sort_index()
-    df["Compute"] = df["Compute"].cumsum()
+    df["CPU"] = df["CPU"].cumsum()
+    df["GPU"] = df["GPU"].cumsum()
     df["Storage"] = df["Storage"].cumsum()
     # Unless we are looking at today granularity, rollup values to the day level
     # (they are returned at the 5min level)
@@ -258,7 +258,7 @@ def DailyCostBreakdown() -> None:
     )
     # Horizontal line indicating the "max" spend by the company
     exec_cost = EXECUTION_COST_MAX or (
-        (df["Compute"].max() + df["Storage"].max()) * 0.8
+        (df["CPU"].max() + df["GPU"].max() + df["Storage"].max()) * 0.8
     )
     fig.add_shape(
         type="line",
