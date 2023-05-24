@@ -1,6 +1,6 @@
 import os
 from collections import defaultdict
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Dict, List
 
 import pandas as pd
@@ -135,6 +135,12 @@ def _to_date(date_string: str) -> str:
     return dt.strftime("%Y-%m-%d")
 
 
+def _add_day(date: str, days: int) -> str:
+    dt = datetime.strptime(date, "%Y-%m-%d")
+    dt_new = dt + timedelta(days=days)
+    return dt_new.strftime("%Y-%m-%d")
+
+
 def get_daily_cost() -> pd.DataFrame:
     window = window_to_param[window_choice.value]
     params = {
@@ -262,8 +268,8 @@ def DailyCostBreakdown() -> None:
     )
     fig.add_shape(
         type="line",
-        x0=df.index.min(),
-        x1=df.index.max(),
+        x0=_add_day(df.index.min(), -1),
+        x1=_add_day(df.index.max(), 1),
         y0=exec_cost,
         y1=exec_cost,
         line=dict(
