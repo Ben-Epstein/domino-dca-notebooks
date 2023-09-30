@@ -206,7 +206,7 @@ def main():
 
     train_args = TrainingArguments(
         output_dir="temp/",
-        evaluation_strategy="batch",
+        evaluation_strategy="steps",
         learning_rate=args.lr,
         per_device_train_batch_size=args.train_batch_size,
         per_device_eval_batch_size=args.eval_batch_size,
@@ -214,7 +214,7 @@ def main():
         weight_decay=0.01,
         metric_for_best_model="f1",
         save_total_limit=2,
-        save_strategy="no",
+        save_strategy="steps",
         load_best_model_at_end=True,
         report_to=["mlflow"],
         optim="adamw_torch",
