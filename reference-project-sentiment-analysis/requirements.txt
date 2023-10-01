@@ -2,4 +2,5 @@ datasets
 torch
 transformers
 evaluate
-accelerate
+accelerate>=0.20.1
+mlflow>=2.5.0

@@ -1,24 +1,22 @@
+import argparse
+import itertools
 from functools import partial
 
-import torch
-import argparse
-
-import numpy as np
 import evaluate
-
-from transformers import (
-    EvalPrediction,
-    BertTokenizer,
-    Trainer,
-    BertForSequenceClassification,
-    TrainingArguments,
-    EarlyStoppingCallback,
-    BatchEncoding
-)
-
-from datasets import load_dataset, Dataset, DatasetDict, ClassLabel
+import numpy as np
+import torch
+from datasets import ClassLabel, Dataset, DatasetDict, load_dataset
 from datasets.formatting.formatting import LazyBatch
-import itertools
+from transformers import (
+    BatchEncoding,
+    DistilBertForSequenceClassification,
+    DistilBertTokenizer,
+    EarlyStoppingCallback,
+    EvalPrediction,
+    Trainer,
+    TrainingArguments,
+)
+import mlflow.transformers
 
 TEXT_COL = "text"
 LABEL_COL = "label"
@@ -102,7 +100,9 @@ def split(ds: DatasetDict) -> DatasetDict:
     return data
 
 
-def preprocess_function(tokenizer: BertTokenizer, examples: LazyBatch) -> BatchEncoding:
+def preprocess_function(
+    tokenizer: DistilBertTokenizer, examples: LazyBatch
+) -> BatchEncoding:
     return tokenizer(
         examples[TEXT_COL], truncation=True, padding=False, max_length=512
     )  # 512 because we use BERT
@@ -116,9 +116,24 @@ def compute_metrics(eval_pred: EvalPrediction) -> dict:
     )
 
 
-def train(model: BertForSequenceClassification, args: TrainingArguments, dataset_train: Dataset, dataset_val: Dataset) -> Trainer:
+def train(
+    model: DistilBertForSequenceClassification,
+    tokenizer: DistilBertTokenizer,
+    args: TrainingArguments,
+    dataset_train: Dataset,
+    dataset_val: Dataset,
+) -> Trainer:
+
+    mlflow.transformers.autolog(
+        log_input_examples=True,
+        log_model_signatures=True,
+        log_models=False,
+        log_datasets=False
+    )
+
     trainer = Trainer(
         model=model,
+        tokenizer=tokenizer,
         args=args,
         train_dataset=dataset_train,
         eval_dataset=dataset_val,
@@ -199,8 +214,10 @@ def main():
     ds = load_data(args.dataset_name, args.text_col, args.label_col)
     ds = split(ds)
 
-    model = BertForSequenceClassification.from_pretrained(args.bert_model)
-    tokenizer = BertTokenizer.from_pretrained(args.bert_model)
+    model = DistilBertForSequenceClassification.from_pretrained(
+        args.bert_model, id2label={0: 'negative', 1: 'positive'}
+    )
+    tokenizer = DistilBertTokenizer.from_pretrained(args.bert_model)
 
     ds = ds.map(partial(preprocess_function, tokenizer))
 
@@ -216,18 +233,16 @@ def main():
         save_total_limit=2,
         save_strategy="steps",
         load_best_model_at_end=True,
-        report_to=["mlflow"],
         optim="adamw_torch",
     )
 
-    trainer = train(model, train_args, ds[TRAIN], ds[VAL])
+    trainer = train(model, tokenizer, train_args, ds[TRAIN], ds[VAL])
 
     eval_test = trainer.predict(ds[TEST])
-    print(f"Eval Test: {eval_test}")
-    # print("Accuracy on test: {:.2f}".format(eval_test))
+    print(f"Performance on test: {eval_test.metrics}")
 
     # Please change the location to where you want to save the model, /mnt/artifacts is available for git based projects
-    # trainer.save_model("/mnt/artifacts/amazon-sentiment/")
+    trainer.save_model(MODEL_DIR)
 
 
 if __name__ == "__main__":
