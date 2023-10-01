@@ -197,8 +197,8 @@ def main():
         default="label",
     )
     parser.add_argument(
-        "--bert_model",
-        help="BERT model from huggingface hub to use",
+        "--distilbert_model",
+        help="Distil-BERT model from huggingface hub to use",
         required=False,
         default="distilbert-base-uncased",
     )
@@ -215,9 +215,9 @@ def main():
     ds = split(ds)
 
     model = DistilBertForSequenceClassification.from_pretrained(
-        args.bert_model, id2label={0: 'negative', 1: 'positive'}
+        args.distilbert_model, id2label={0: 'negative', 1: 'positive'}
     )
-    tokenizer = DistilBertTokenizer.from_pretrained(args.bert_model)
+    tokenizer = DistilBertTokenizer.from_pretrained(args.distilbert_model)
 
     ds = ds.map(partial(preprocess_function, tokenizer))
 

@@ -12,17 +12,22 @@ Fine-tuning a pre-trained transformer an effective and state-of-the-art techniqu
 
 The advantage of using the process outlined above is that pre-training is typically computationally expensive and requires the processing of large volumes of data. Task fine-tuning, on the other hand, is relatively cheap and quick to accomplish, especially if distributed and GPU-accelerated compute can be employed in the process.
 
-In this demo project we use the [Sentiment Analysis for Amazon Reviews](https://huggingface.co/datasets/amazon_polarity) [3], which provides 3.6M samples of Amazon product reviews, and their corresponding sentiments (positive, negative). Because of how large this dataset is (4GB), for demonstration purposes you'll see us use only a subset. 
+In this demo project we use the [Sentiment Analysis for Amazon Reviews](https://huggingface.co/datasets/amazon_polarity), which provides 3.5M samples of Amazon product reviews, and their corresponding sentiments (positive, negative). Because of how large this dataset is (4GB), for demonstration purposes you'll see us use only a subset. 
 But feel free to change that to use the entire dataset in full.
 
 The assets available in this project are:
 
-* **finetune.ipynb** - A notebook, illustrating the process of getting FinBERT from [Huggingface 🤗](https://huggingface.co/ProsusAI/finbert) into Domino, and using GPU-accelerated backend for the purposes of fine-tuning it with the Sentiment Analysis for Financial News dataset
-* **finetune.py** - A script, which performs the same fine-tuning process but can be scheduled and executed as a Domino job. The script also accepts two command line arguments:
-    * *lr* - learning rate for the fine-tunning process
+* **finetune.ipynb** - A notebook, illustrating the process of getting distilbert from [Huggingface 🤗](https://huggingface.co/distilbert-base-uncased) into Domino, and using GPU-accelerated backend for the purposes of fine-tuning it with the Sentiment Analysis from Amazon Reviews dataset
+* **finetune.py** - A script, which performs the same fine-tuning process but can be scheduled and executed as a Domino job. The script also accepts the following optional command line arguments, with sensible defaults:
+    * *lr* - learning rate for the fine-tuning process
     * *epochs* - number of training epochs
-* **all-data.csv** - A CSV file containing the Sentiment Analysis for Financial News dataset
-* **score.py** - A scoring function, which is used to deploy the fine-tunned model as a [Domino API](https://docs.dominodatalab.com/en/latest/user_guide/8dbc91/host-models-as-rest-apis/)
+    * *train_batch_size* - how large of a batch size for training 
+    * *eval_batch_size* - how large of a batch size for evaluation 
+    * *dataset_name* - which dataset to fine-tune with 
+    * *text_col* - the name of the column in the dataset representing the text 
+    * *label_col* - the name of the column in the dataset representing the label 
+    * *distilbert_model* - the specific Distil-BERT model to use 
+* **score.py** - A scoring function, which is used to deploy the fine-tuned model as a [Domino API](https://docs.dominodatalab.com/en/latest/user_guide/8dbc91/host-models-as-rest-apis/)
 * **app.sh** - Launch instructions for the accompanying Streamlit app
 
 # Model API calls
@@ -32,7 +37,7 @@ The **score.py** provides a scoring function with the following signature: `pred
 ```
 {
   "data": {
-    "sentence": "there is a shortage of capital, and we need extra financing"
+    "sentence": "The item came damanged, 1 star."
   }
 }
 ```
@@ -45,7 +50,8 @@ This projects needs the following custom Docker container:
 FROM quay.io/domino/compute-environment-images:ubuntu20-py3.9-r4.2-domino5.4-gpu
 
 USER ubuntu
-RUN pip install datasets==2.10.1 transformers==4.26.1
+COPY requirements.txt .
+RUN pip install -r requirements.txt
 ```
 
 You also need to make sure that the hardware tier running the notebook or the fine-tuning script has sufficient resources. An *nvidia-low-g4dn-xlarge* hardware tier is recommended, as it provides GPU-acceleration that the fine-tunning can take advantage of.
