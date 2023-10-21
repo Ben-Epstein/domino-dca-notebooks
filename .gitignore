@@ -5,6 +5,7 @@ __pycache__/
 .idea
 mlruns
 checkpoint*
+.DS_STORE
 
 # C extensions
 *.so
