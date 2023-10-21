@@ -12,4 +12,14 @@ The assets available in this project are:
 # Set up instructions
 This project should run in any standard Domino workspace with GPU acceleration hardware available.
 
+Here is an example setup:
+
+```
+FROM quay.io/domino/compute-environment-images:ubuntu20-py3.9-r4.2-domino5.4-gpu
+
+USER ubuntu
+COPY requirements.txt .
+RUN pip install -r requirements.txt
+```
+
 [^1]: Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, Neil Houlsby
