@@ -12,6 +12,8 @@ The assets available in this project are:
 # Set up instructions
 This project should run in any standard Domino workspace with GPU acceleration hardware available.
 
+**Ensure you have enough disk space to load the images (~5GB)**
+
 Here is an example setup:
 
 ```
