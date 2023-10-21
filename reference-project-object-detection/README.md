@@ -1,6 +1,6 @@
 # Fine-Tune a DETR model for ppe object detection.
 
-DETR is a Transformer model architecture designed end-to-end Object Detection tasks. First introduced in [End-to-End Object Detection with Transformers](https://arxiv.org/abs/2005.12872): by Nicolas Carion et al[^1], the team succesfully combined a convolutional neural network (CNN) with an encoder-decoder model to fully train a model on object detection. They showed how this architecture could be extended to image segmentation as well, another popular computer vision task.
+DETR is a Transformer model architecture designed end-to-end Object Detection tasks. First introduced in [End-to-End Object Detection with Transformers](https://arxiv.org/abs/2005.12872): by Nicolas Carion et al[^1], the team succesfully combined a convolutional neural network (CNN), namely ResNet 50 and 101, with an encoder-decoder model to fully train a model on object detection. They showed how this architecture could be extended to image segmentation as well, another popular computer vision task.
 
 In this notebook, we will fine-tune this Facebook's DETR model on a ppe (personal protective equiptment) data using Domino. We will also leverage Domino's deep integration with MLFlow to track our model performance and log our resulting model to MLFlow.
 
