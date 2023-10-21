@@ -1,0 +1,8 @@
+transformers
+datasets
+evaluate
+torchvision
+accelerate
+timm
+albumentations
+mlflow
