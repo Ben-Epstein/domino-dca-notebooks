@@ -1,8 +1,8 @@
-transformers
-datasets
-evaluate
-torchvision
-accelerate
-timm
-albumentations
-mlflow
+transformers<4.35
+datasets<2.15
+evaluate<0.4.2
+torchvision<0.17.0
+accelerate<0.24.0
+timm<0.10.0
+albumentations<1.4.0
+mlflow>=2.5.0
