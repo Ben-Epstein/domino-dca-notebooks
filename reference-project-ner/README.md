@@ -27,3 +27,8 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 ```
 
+# Streamlit app
+
+The available streamlit app showcases how to use the model in production. A GPU is not required for the demo, but reccomended for deploying the model to an endpoint
+<img width="1190" alt="image" src="https://github.com/Ben-Epstein/domino-dca-notebooks/assets/22605641/c95ae6de-0f17-4837-8d1e-62dd8bd420ea">
+
