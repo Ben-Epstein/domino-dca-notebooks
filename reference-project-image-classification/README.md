@@ -24,4 +24,10 @@ COPY requirements.txt .
 RUN pip install -r requirements.txt
 ```
 
+# Streamlit App
+The streamlit app is a simple food classifier showcasing how to use the model in production. A GPU isn't required to run this demo, but is required to deploy the model to production with reasonable latencies. 
+
+<img width="975" alt="image" src="https://github.com/Ben-Epstein/domino-dca-notebooks/assets/22605641/3572e0bc-e07d-4bef-81cf-d421f664004e">
+
+
 [^1]: Alexey Dosovitskiy, Lucas Beyer, Alexander Kolesnikov, Dirk Weissenborn, Xiaohua Zhai, Thomas Unterthiner, Mostafa Dehghani, Matthias Minderer, Georg Heigold, Sylvain Gelly, Jakob Uszkoreit, Neil Houlsby
